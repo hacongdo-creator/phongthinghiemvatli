@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô phỏng Thuyết Động học Phân tử</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        canvas {
+            background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+            border: 2px solid #334155;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Tùy chỉnh thanh trượt (slider) */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 3px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
+
+    <div class="max-w-6xl w-full grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Khu vực hiển thị mô phỏng (Bên trái) -->
+        <div class="md:col-span-2 h-[500px] md:h-[600px] relative">
+            <canvas id="simCanvas"></canvas>
+            <div class="absolute top-4 left-4 bg-slate-900/80 p-3 rounded-lg border border-slate-700 text-sm">
+                <p class="font-bold text-blue-400 mb-1">Kiến thức quan sát:</p>
+                <ul class="list-disc pl-4 space-y-1 text-slate-200">
+                    <li>1. Hạt riêng biệt (các vòng tròn).</li>
+                    <li>2. Chuyển động tăng khi <span class="text-red-400">Nhiệt độ</span> tăng.</li>
+                    <li>3. <span class="text-green-400">Lực liên kết</span> giữ chúng lại với nhau (hút/đẩy).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Khu vực điều khiển (Bên phải) -->
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col gap-6 shadow-xl">
+            <div>
+                <h1 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
+                    Mô phỏng Phân tử
+                </h1>
+                <p class="text-slate-400 text-sm">Điều chỉnh các thông số vĩ mô để quan sát sự thay đổi ở cấp độ vi mô.</p>
+            </div>
+
+            <!-- Điều khiển Trạng thái (Presets) -->
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">Trạng thái vật chất (Gợi ý)</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="setPreset('solid')" class="px-3 py-2 bg-slate-700 hover:bg-blue-600 text-white rounded transition-colors text-sm font-semibold">Thể Rắn</button>
+                    <button onclick="setPreset('liquid')" class="px-3 py-2 bg-slate-700 hover:bg-teal-600 text-white rounded transition-colors text-sm font-semibold">Thể Lỏng</button>
+                    <button onclick="setPreset('gas')" class="px-3 py-2 bg-slate-700 hover:bg-red-600 text-white rounded transition-colors text-sm font-semibold">Thể Khí</button>
+                </div>
+            </div>
+
+            <hr class="border-slate-700">
+
+            <!-- Điều khiển Nhiệt độ -->
+            <div>
+                <div class="flex justify-between items-end mb-2">
+                    <label class="block text-sm font-medium text-slate-300">
+                        Nhiệt độ (Động năng)
+                    </label>
+                    <span id="tempValue" class="text-xs bg-slate-900 px-2 py-1 rounded text-red-400 font-mono">Trung bình</span>
+                </div>
+                <input type="range" id="tempSlider" min="0" max="100" value="30">
+                <p class="text-xs text-slate-500 mt-2">Nhiệt độ làm các hạt chuyển động nhanh và hỗn loạn hơn.</p>
+            </div>
+
+            <!-- Điều khiển Lực liên kết -->
+            <div>
+                <div class="flex justify-between items-end mb-2">
+                    <label class="block text-sm font-medium text-slate-300">
+                        Lực liên kết phân tử
+                    </label>
+                    <span id="forceValue" class="text-xs bg-slate-900 px-2 py-1 rounded text-green-400 font-mono">Trung bình</span>
+                </div>
+                <input type="range" id="forceSlider" min="0" max="100" value="50">
+                <p class="text-xs text-slate-500 mt-2">Lực hút giữ các hạt lại gần nhau (lực đẩy tự động kích hoạt khi hạt quá sát).</p>
+            </div>
+
+            <div class="mt-auto">
+                <button onclick="resetParticles()" class="w-full py-3 border border-slate-600 text-slate-300 hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Khởi tạo lại hệ thống
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const tempSlider = document.getElementById('tempSlider');
+        const forceSlider = document.getElementById('forceSlider');
+        const tempValue = document.getElementById('tempValue');
+        const forceValue = document.getElementById('forceValue');
+
+        // Cấu hình vật lý
+        const NUM_PARTICLES = 120;
+        const PARTICLE_RADIUS = 8;
+        const GRAVITY = 0.1; // Trọng lực nhẹ để chất rắn/lỏng chìm xuống đáy
+        const DAMPING = 0.95; // Lực cản để hệ thống không bị tăng tốc vô hạn
+
+        let particles = [];
+        let width, height;
+
+        // Cập nhật kích thước canvas cho sắc nét (Hỗ trợ màn hình Retina)
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            width = canvas.width;
+            height = canvas.height;
+        }
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                // Vận tốc ban đầu ngẫu nhiên
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.radius = PARTICLE_RADIUS;
+            }
+
+            draw() {
+                // Tính tốc độ để đổ màu (Nhanh = Đỏ, Chậm = Xanh lam)
+                let speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                let normalizedSpeed = Math.min(speed / 8, 1); // 0 đến 1
+                
+                // Pha màu từ xanh sang đỏ
+                let r = Math.floor(normalizedSpeed * 255);
+                let b = Math.floor((1 - normalizedSpeed) * 255);
+                let g = 50;
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                
+                // Gradient cho phân tử nhìn giống hình cầu 3D
+                let gradient = ctx.createRadialGradient(
+                    this.x - this.radius/3, this.y - this.radius/3, this.radius/4,
+                    this.x, this.y, this.radius
+                );
+                gradient.addColorStop(0, '#ffffff');
+                gradient.addColorStop(1, `rgb(${r}, ${g}, ${b})`);
+                
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        function resetParticles() {
+            particles = [];
+            // Sinh các hạt ở giữa màn hình
+            for (let i = 0; i < NUM_PARTICLES; i++) {
+                let px = width / 2 + (Math.random() - 0.5) * 100;
+                let py = height / 2 + (Math.random() - 0.5) * 100;
+                particles.push(new Particle(px, py));
+            }
+        }
+
+        function setPreset(state) {
+            if (state === 'solid') {
+                tempSlider.value = 5;
+                forceSlider.value = 100;
+            } else if (state === 'liquid') {
+                tempSlider.value = 35;
+                forceSlider.value = 60;
+            } else if (state === 'gas') {
+                tempSlider.value = 90;
+                forceSlider.value = 5;
+            }
+            updateLabels();
+        }
+
+        function updateLabels() {
+            let tVal = tempSlider.value;
+            if(tVal < 20) tempValue.innerText = "Rất thấp";
+            else if(tVal < 60) tempValue.innerText = "Trung bình";
+            else tempValue.innerText = "Rất cao";
+
+            let fVal = forceSlider.value;
+            if(fVal < 20) forceValue.innerText = "Rất yếu";
+            else if(fVal < 70) forceValue.innerText = "Vừa phải";
+            else forceValue.innerText = "Rất mạnh";
+        }
+
+        // Cập nhật nhãn khi kéo slider
+        tempSlider.addEventListener('input', updateLabels);
+        forceSlider.addEventListener('input', updateLabels);
+
+        // Vòng lặp mô phỏng vật lý
+        function updatePhysics() {
+            const temp = parseInt(tempSlider.value) / 100; // 0.0 đến 1.0
+            const forceStrength = parseInt(forceSlider.value) / 100; // 0.0 đến 1.0
+            
+            const MAX_ATTRACT_DIST = PARTICLE_RADIUS * 5;
+            
+            // Xử lý tương tác giữa các phân tử (Lực Hút / Lực Đẩy)
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    let p1 = particles[i];
+                    let p2 = particles[j];
+                    
+                    let dx = p2.x - p1.x;
+                    let dy = p2.y - p1.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (dist === 0) continue;
+
+                    // KIẾN THỨC SỐ 3: LỰC ĐẨY VÀ LỰC HÚT
+                    // 1. Lực đẩy (Repulsion) khi khoảng cách quá gần (đụng nhau)
+                    if (dist < PARTICLE_RADIUS * 2) {
+                        let overlap = PARTICLE_RADIUS * 2 - dist;
+                        let pushX = (dx / dist) * overlap * 0.5;
+                        let pushY = (dy / dist) * overlap * 0.5;
+                        
+                        // Đẩy chúng ra xa nhau để không bị chồng lấp
+                        p1.x -= pushX; p1.y -= pushY;
+                        p2.x += pushX; p2.y += pushY;
+                        
+                        // Phản hồi vận tốc khi va chạm
+                        p1.vx -= pushX * 0.5; p1.vy -= pushY * 0.5;
+                        p2.vx += pushX * 0.5; p2.vy += pushY * 0.5;
+                    } 
+                    // 2. Lực hút (Attraction) ở khoảng cách vừa phải (phụ thuộc Slider Lực Liên Kết)
+                    else if (dist < MAX_ATTRACT_DIST) {
+                        // Tính toán lực hút: mạnh nhất ở gần và yếu dần khi ra xa
+                        let pull = forceStrength * 0.3 * (1 - (dist - PARTICLE_RADIUS*2) / (MAX_ATTRACT_DIST - PARTICLE_RADIUS*2));
+                        let pullX = (dx / dist) * pull;
+                        let pullY = (dy / dist) * pull;
+                        
+                        p1.vx += pullX; p1.vy += pullY;
+                        p2.vx -= pullX; p2.vy -= pullY;
+                    }
+                }
+            }
+
+            // Cập nhật vị trí và xử lý nhiệt độ cho từng hạt
+            for (let p of particles) {
+                // KIẾN THỨC SỐ 2: CHUYỂN ĐỘNG KHÔNG NGỪNG VÀ NHIỆT ĐỘ
+                // Nhiệt độ cao -> Động năng ngẫu nhiên cao (Chuyển động nhiệt Brownian)
+                let thermalJitter = temp * 4; 
+                p.vx += (Math.random() - 0.5) * thermalJitter;
+                p.vy += (Math.random() - 0.5) * thermalJitter;
+
+                // Thêm trọng lực nhẹ (giúp thể lỏng/rắn chìm xuống)
+                p.vy += GRAVITY;
+
+                // Áp dụng lực cản để mô phỏng sự ổn định
+                p.vx *= DAMPING;
+                p.vy *= DAMPING;
+
+                // Giới hạn tốc độ tối đa để tránh lỗi vật lý
+                let speedSq = p.vx*p.vx + p.vy*p.vy;
+                let MAX_SPEED = 15;
+                if(speedSq > MAX_SPEED*MAX_SPEED) {
+                    let speed = Math.sqrt(speedSq);
+                    p.vx = (p.vx / speed) * MAX_SPEED;
+                    p.vy = (p.vy / speed) * MAX_SPEED;
+                }
+
+                // Cập nhật toạ độ
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Va chạm với tường (Bật lại)
+                if (p.x < p.radius) { p.x = p.radius; p.vx *= -0.8; }
+                if (p.x > width - p.radius) { p.x = width - p.radius; p.vx *= -0.8; }
+                if (p.y < p.radius) { p.y = p.radius; p.vy *= -0.8; }
+                if (p.y > height - p.radius) { p.y = height - p.radius; p.vy *= -0.8; }
+            }
+        }
+
+        // Vòng lặp vẽ (Render Loop)
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            
+            updatePhysics();
+            
+            for (let p of particles) {
+                p.draw();
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Khởi tạo ban đầu
+        window.addEventListener('resize', () => {
+            let oldWidth = width;
+            let oldHeight = height;
+            resizeCanvas();
+            // Điều chỉnh vị trí hạt khi resize màn hình
+            for (let p of particles) {
+                p.x = (p.x / oldWidth) * width;
+                p.y = (p.y / oldHeight) * height;
+            }
+        });
+
+        // Khởi động
+        resizeCanvas();
+        setPreset('liquid'); // Mặc định là thể lỏng
+        resetParticles();
+        animate();
+
+    </script>
+</body>
+</html>
